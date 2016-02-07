@@ -21,16 +21,19 @@
 # Registers:
 
 # File marks:
-'0  2  2  /c/Users/merry/Desktop/husband/mirror-network/.gitignore
+'0  1  12  /c/Users/merry/Desktop/husband/mirror-network/.gitignore
+'1  3  2  /c/Users/merry/Desktop/husband/mirror-network/.gitignore
 
 # Jumplist (newest first):
+-'  1  12  /c/Users/merry/Desktop/husband/mirror-network/.gitignore
+-'  3  2  /c/Users/merry/Desktop/husband/mirror-network/.gitignore
 -'  2  2  /c/Users/merry/Desktop/husband/mirror-network/.gitignore
--'  1  0  /c/Users/merry/Desktop/husband/mirror-network/.gitignore
 
 # History of marks within files (newest to oldest):
 
 > /c/Users/merry/Desktop/husband/mirror-network/.gitignore
-	"	2	2
-	^	2	3
-	.	2	2
-	+	2	2
+	"	1	12
+	^	1	13
+	.	1	0
+	+	3	2
+	+	1	0
