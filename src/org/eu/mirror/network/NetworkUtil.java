@@ -2,7 +2,10 @@ package org.eu.mirror.network;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.eu.mirror.network.NetConnStatusReceiver.NetConnStatusListener;
 
@@ -12,16 +15,20 @@ import com.google.zxing.WriterException;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
+
 import android.content.Context;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.wifi.ScanResult;
 import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiConfiguration.KeyMgmt;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
+import android.os.Build;
+import android.text.TextUtils;
 import android.util.Log;
 
 /**
@@ -37,6 +44,7 @@ public class NetworkUtil {
 	private static final String LOG_TAG = NetworkUtil.class.getName();
 
 	private static NetConnStatusReceiver mNetMonitor = new NetConnStatusReceiver();
+	
 
 	/**
 	 * 
@@ -60,6 +68,23 @@ public class NetworkUtil {
 
 	/**
 	 * 
+	 * @Title: isIPAddress
+	 * @Description: TODO
+	 * @param ipaddr
+	 * @return boolean
+	 * @throws
+	 */
+	public static boolean isIPAddress(String ipaddr) {
+		boolean flag = false;
+		Pattern pattern = Pattern
+				.compile("\\b((?!\\d\\d\\d)\\d+|1\\d\\d|2[0-4]\\d|25[0-5])\\.((?!\\d\\d\\d)\\d+|1\\d\\d|2[0-4]\\d|25[0-5])\\.((?!\\d\\d\\d)\\d+|1\\d\\d|2[0-4]\\d|25[0-5])\\.((?!\\d\\d\\d)\\d+|1\\d\\d|2[0-4]\\d|25[0-5])\\b");
+		Matcher m = pattern.matcher(ipaddr);
+		flag = m.matches();
+		return flag;
+	}
+
+	/**
+	 * 
 	 * @Title: getCurWifiInfo
 	 * @Description: get ssid and security
 	 * @param context
@@ -76,6 +101,9 @@ public class NetworkUtil {
 			Log.d(LOG_TAG, "wifi ssid is null");
 			return info;
 		}
+		
+		mWifiManager.startScan();
+		List<ScanResult> scanResult = mWifiManager.getScanResults();
 
 		ConnectivityManager connec = (ConnectivityManager) context
 				.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -83,20 +111,101 @@ public class NetworkUtil {
 			WIFI_SECURITY security = null;
 			List<WifiConfiguration> wifiConfigList = mWifiManager
 					.getConfiguredNetworks();
-			for (int i = 0; i < wifiConfigList.size(); i++) {
-				Log.d(LOG_TAG, wifiConfigList.get(i).toString());
-
-				if (wifiInfo.getSSID().equals(wifiConfigList.get(i).SSID)) {
-					security = getSecurity(wifiConfigList.get(i));
-					Log.i(LOG_TAG, "当前网络安全性：" + security);
-					break;
-				}
+			/*for (int i = 0; i < wifiConfigList.size(); i++) {
+			Log.d(LOG_TAG, wifiConfigList.get(i).toString());
+			
+			if (wifiInfo.getSSID().equals(wifiConfigList.get(i).SSID)) {
+				security = getSecurity(wifiConfigList.get(i));
+				Log.i(LOG_TAG, "褰撳墠缃戠粶瀹夊叏鎬э細" + security);
+				break;
 			}
-
-			info = new WifiInfor(wifiInfo.getSSID(), "", security);
+		}*/
+		String ssid = wifiInfo.getSSID();
+		int deviceVersion = 0;
+		deviceVersion = Build.VERSION.SDK_INT;
+		if (deviceVersion > 17) {
+			if (ssid.startsWith("\"") && ssid.endsWith("\"")) {
+				ssid = ssid.substring(1, ssid.length() - 1);
+			}
+		}
+		for(int i = 0; i < scanResult.size(); i++){
+			if(ssid.equals(scanResult.get(i).SSID)){
+				String cap = scanResult.get(i).capabilities;
+				if(!cap.isEmpty()){
+					if(cap.contains("WPA") || cap.contains("wpa")){
+						security = WIFI_SECURITY.SECURITY_PSK;
+					} else if(cap.contains("WEP") || cap.contains("wep")){
+						security = WIFI_SECURITY.SECURITY_WEP;
+					} else if(scanResult.get(i).capabilities.equals("[ESS]")){
+						security = WIFI_SECURITY.SECURITY_NONE;
+					} else {
+						security = WIFI_SECURITY.SECURITY_WEP;
+					}
+				} 
+			}
+		}
+		info = new WifiInfor(ssid, "", security);
 		}
 
 		return info;
+	}
+
+	public static List<WifiInfor> getScanresultLists(Context context) {
+		List<WifiInfor> mWifiInfors = new ArrayList<WifiInfor>();
+		WIFI_SECURITY wifi_SECURITY = null;
+		WifiManager mWifiManager = (WifiManager) context
+				.getSystemService(Context.WIFI_SERVICE);
+		mWifiManager.startScan();
+		List<ScanResult> scanResult = mWifiManager.getScanResults();
+		for (ScanResult result : scanResult) {
+			if(getCurWifiInfo(context) != null){
+				if (!TextUtils.isEmpty(result.SSID)
+						&& !containName(mWifiInfors, result.SSID)
+						&& !result.SSID.equals(getCurWifiInfo(context).getSsid())) {
+					String cap = result.capabilities;
+					if (!cap.isEmpty()) {
+						if (cap.contains("WPA") || cap.contains("wpa")) {
+							wifi_SECURITY = WIFI_SECURITY.SECURITY_PSK;
+						} else if (cap.contains("WEP") || cap.contains("wep")) {
+							wifi_SECURITY = WIFI_SECURITY.SECURITY_WEP;
+						} else if (result.capabilities.equals("[ESS]")) {
+							wifi_SECURITY = WIFI_SECURITY.SECURITY_NONE;
+						} else {
+							wifi_SECURITY = WIFI_SECURITY.SECURITY_WEP;
+						}
+					}
+					mWifiInfors.add(new WifiInfor(result.SSID, "", wifi_SECURITY));
+				}
+			} else {
+				if(!TextUtils.isEmpty(result.SSID)
+						&&!containName(mWifiInfors, result.SSID)){
+					String cap = result.capabilities;
+					if (!cap.isEmpty()) {
+						if (cap.contains("WPA") || cap.contains("wpa")) {
+							wifi_SECURITY = WIFI_SECURITY.SECURITY_PSK;
+						} else if (cap.contains("WEP") || cap.contains("wep")) {
+							wifi_SECURITY = WIFI_SECURITY.SECURITY_WEP;
+						} else if (result.capabilities.equals("[ESS]")) {
+							wifi_SECURITY = WIFI_SECURITY.SECURITY_NONE;
+						} else {
+							wifi_SECURITY = WIFI_SECURITY.SECURITY_WEP;
+						}
+					}
+					mWifiInfors.add(new WifiInfor(result.SSID, "", wifi_SECURITY));
+				}
+			}
+		}
+		return mWifiInfors;
+	}
+
+	private static boolean containName(List<WifiInfor> sr, String name) {
+		for (WifiInfor result : sr) {
+			if (!TextUtils.isEmpty(result.getSsid())
+					&& result.getSsid().equals(name)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -179,6 +288,10 @@ public class NetworkUtil {
 			Log.e(LOG_TAG, e.toString());
 		}
 	}
+
+
+
+	
 
 	/**
 	 * 

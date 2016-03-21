@@ -7,13 +7,20 @@ package org.eu.mirror.network;
 * @date 2016-1-21 ÏÂÎç2:10:08  
 *
  */
+
 public enum MIRROR_NETSTATUS {
+	/**
+	 * send-status should be removed from the class better. 
+	 */
 	SEND_SUCC(0, "send succ"), 
 	SEND_FAIL(1, "send fail"), 
 	SEND_AGAIN(2, "hold and try to send again"),
-	NET_EXCEPTION(3, "network exception"),
-	NET_DISCONNECT(4, "network disconnect"),
-	NET_MSGINVALID(5, "network MSG invalid");
+	NET_CONNCLOSE(3, "connection already was closed"),
+	NET_EXCEPTION(4, "network exception"),
+	NET_DISCONNECT(5, "network disconnect"),
+	NET_MSGINVALID(6, "network MSG invalid"),
+	NET_CONNECT(7, "network connect");
+	
 	private int statusCode;
 	private String statusDesc;
 	

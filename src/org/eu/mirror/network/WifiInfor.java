@@ -1,5 +1,7 @@
 package org.eu.mirror.network;
 
+import java.io.Serializable;
+
 /**
  * 
  * @ClassName: WifiInfor
@@ -9,10 +11,14 @@ package org.eu.mirror.network;
  * 
  */
 
-public class WifiInfor {
-	private String ssid;
-	private String passwd;
-	private WIFI_SECURITY security;
+public class WifiInfor implements Serializable {
+	/**  
+	* @Fields serialVersionUID : TODO 
+	*/  
+	private static final long serialVersionUID = 1L;
+	private String SSID;
+	private String PASSWORD;
+	private WIFI_SECURITY TYPE;
 
 	WifiInfor(String ssid, String passwd, WIFI_SECURITY security) {
 		this.setSsid(ssid);
@@ -21,26 +27,26 @@ public class WifiInfor {
 	}
 
 	public String getSsid() {
-		return ssid;
+		return SSID;
 	}
 
 	public void setSsid(String ssid) {
-		this.ssid = ssid;
+		this.SSID = ssid;
 	}
 
 	public String getPasswd() {
-		return passwd;
+		return PASSWORD;
 	}
 
 	public void setPasswd(String passwd) {
-		this.passwd = passwd;
+		this.PASSWORD = passwd;
 	}
 
 	public WIFI_SECURITY getSecurity() {
-		return security;
+		return TYPE;
 	}
 
 	public void setSecurity(WIFI_SECURITY security) {
-		this.security = security;
+		this.TYPE = security;
 	}
 }

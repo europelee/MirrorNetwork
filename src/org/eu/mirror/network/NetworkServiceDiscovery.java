@@ -26,8 +26,8 @@ import android.util.Log;
 public class NetworkServiceDiscovery {
 	private final String LOG_TAG = NetworkServiceDiscovery.class.getName();
 	private final String TYPE = "_mirror._tcp.local.";
-	private final String SERVICE_NAME = "LocalMirrorComm";
-
+	private String SERVICE_NAME = "LocalMirrorComm";
+	private String  mMacAddr = null;
 	private Context mContext = null;
 	private JmDNS mJmDNS = null;
 	private ServiceInfo mServiceInfo = null;
@@ -48,6 +48,9 @@ public class NetworkServiceDiscovery {
 			WifiManager wifi = (WifiManager) mContext
 					.getSystemService(android.content.Context.WIFI_SERVICE);
 			WifiInfo wifiInfo = wifi.getConnectionInfo();
+			
+			mMacAddr = wifiInfo.getMacAddress();
+			SERVICE_NAME = SERVICE_NAME + "-" + mMacAddr;
 			int intaddr = wifiInfo.getIpAddress();
 
 			byte[] byteaddr = new byte[] { (byte) (intaddr & 0xff),

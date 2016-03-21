@@ -70,4 +70,15 @@ public interface INetworkConnection {
 	* @throws
 	 */
 	public boolean isClosed();
+	
+	/**
+	 * 
+	* @Title: setIMirrorNetMonitor  
+	* @Description: a special listener for monitoring mirror netwrok status
+	* 				case: connect, disconnect, error 
+	* @param mon
+	* void
+	* @throws
+	 */
+	public void setIMirrorNetMonitor(IMirrorNetMonitor mon);
 }

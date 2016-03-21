@@ -20,6 +20,7 @@ import org.jboss.netty.channel.ChannelEvent;
 import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.channel.ChannelFutureProgressListener;
+import org.jboss.netty.channel.ChannelHandler;
 import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -35,6 +36,12 @@ import org.jboss.netty.handler.codec.serialization.ClassResolvers;
 import org.jboss.netty.handler.codec.serialization.ObjectDecoder;
 import org.jboss.netty.handler.codec.serialization.ObjectEncoder;
 import org.jboss.netty.handler.stream.ChunkedWriteHandler;
+import org.jboss.netty.handler.timeout.IdleState;
+import org.jboss.netty.handler.timeout.IdleStateAwareChannelHandler;
+import org.jboss.netty.handler.timeout.IdleStateEvent;
+import org.jboss.netty.handler.timeout.IdleStateHandler;
+import org.jboss.netty.util.HashedWheelTimer;
+import org.jboss.netty.util.Timer;
 
 import android.util.Log;
 
@@ -69,6 +76,11 @@ public class NettyClient implements INetworkConnection {
 	private int num_retries = 0;
 	private HashMap<MIRROR_APPTYPE, IMirrorMsgListener> msgObserList;
 
+	private Timer timer;
+	private ChannelHandler idleStateHandler; // heartbeat check
+
+	private IMirrorNetMonitor mNetMon;
+
 	public NettyClient(String ipAddress, int port) {
 		this.setmIpAddress(ipAddress);
 		this.setmPort(port);
@@ -78,20 +90,29 @@ public class NettyClient implements INetworkConnection {
 		being_closed = new AtomicBoolean(false);
 		isConnecting = new AtomicBoolean(false);
 		msgObserList = new HashMap<MIRROR_APPTYPE, IMirrorMsgListener>();
+
+		timer = new HashedWheelTimer();
+		idleStateHandler = new IdleStateHandler(timer, 20, 10, 0);
 	}
 
+	/**
+	 * notice: pass null, it means that remove li of appType
+	 */
 	@Override
 	public boolean setMirrorMsgListener(MIRROR_APPTYPE appType,
 			IMirrorMsgListener li) {
+
+		// change: not check if exist, just set
 		if (msgObserList.containsKey(appType)) {
 			Log.w(LOG_TAG, "there exists apptype " + appType
 					+ " listener registered in");
-			return false;
+			// return false;
 		}
 
 		if (li == null) {
-			Log.e(LOG_TAG, "listener is null");
-			return false;
+			Log.w(LOG_TAG, "listener is null, would remove app " + appType
+					+ " mirrormsglistener");
+			// return false;
 		}
 
 		msgObserList.put(appType, li);
@@ -227,6 +248,7 @@ public class NettyClient implements INetworkConnection {
 											.weakCachingConcurrentResolver(MirrorMessage.class
 													.getClassLoader())),
 							new ObjectEncoder(), new ChunkedWriteHandler(),
+							idleStateHandler, new IdleProcHandler(),
 							new ClientHandler());
 				}
 			});
@@ -306,6 +328,9 @@ public class NettyClient implements INetworkConnection {
 							Log.i(LOG_TAG, "Connection established, channel = "
 									+ channel);
 							setChannel(channel);
+							if (mNetMon != null) {
+								mNetMon.onConnect(channel.getRemoteAddress().toString());
+							}	
 
 						} else {
 							Log.i(LOG_TAG, "Failed to reconnect ... channel "
@@ -332,6 +357,8 @@ public class NettyClient implements INetworkConnection {
 			MirrorMessage reqO = new MirrorMessage(MIRROR_APPTYPE.MIRROR,
 					mIpAddress, "hello nettysvr");
 			this.channelRef.get().write(reqO);
+		} else {
+			Log.w(LOG_TAG, "channel is null");
 		}
 	}
 
@@ -390,6 +417,10 @@ public class NettyClient implements INetworkConnection {
 					"Client is being closed, and does not take requests any more");
 			broadcastNetStatus2Listener(MIRROR_NETSTATUS.NET_DISCONNECT,
 					"Client is being closed, and does not take requests any more");
+			if (mNetMon != null) {
+				mNetMon.onError(MIRROR_NETSTATUS.NET_CONNCLOSE,
+						"Client is being closed, and does not take requests any more");
+			}
 			return MIRROR_NETSTATUS.SEND_FAIL;
 		}
 
@@ -404,7 +435,11 @@ public class NettyClient implements INetworkConnection {
 			}
 		} else {
 			broadcastNetStatus2Listener(MIRROR_NETSTATUS.SEND_FAIL,
-					"channelRef is null");			
+					"channelRef is null");
+			if (mNetMon != null) {
+				mNetMon.onError(MIRROR_NETSTATUS.NET_EXCEPTION,
+						"channelRef is null");
+			}
 			return MIRROR_NETSTATUS.SEND_FAIL;
 		}
 	}
@@ -474,6 +509,29 @@ public class NettyClient implements INetworkConnection {
 			return MIRROR_NETSTATUS.SEND_FAIL;
 	}
 
+	// Handler should handle the IdleStateEvent triggered by IdleStateHandler.
+	private class IdleProcHandler extends IdleStateAwareChannelHandler {
+
+		@Override
+		public void channelIdle(ChannelHandlerContext ctx, IdleStateEvent e) {
+			Log.d(LOG_TAG, "channelIdle: " + e);
+			if (e.getState() == IdleState.READER_IDLE) {
+
+				if (mNetMon != null) {
+					mNetMon.onDisconnect(MIRROR_NETSTATUS.NET_DISCONNECT,
+							"heartbeat timeout");
+				}
+
+				e.getChannel().close();
+			} else if (e.getState() == IdleState.WRITER_IDLE) {
+				MirrorMessage hi = new MirrorMessage(MIRROR_APPTYPE.MIRROR,
+						mIpAddress, "hello nettysvr");
+
+				e.getChannel().write(hi);
+			}
+		}
+	}
+
 	private class ClientHandler extends SimpleChannelHandler {
 
 		@Override
@@ -537,16 +595,21 @@ public class NettyClient implements INetworkConnection {
 			Log.i(LOG_TAG, "exceptionCaught " + e.getCause().toString());
 			broadcastNetStatus2Listener(MIRROR_NETSTATUS.NET_EXCEPTION, e
 					.getCause().toString());
+
+			if (mNetMon != null) {
+				mNetMon.onError(MIRROR_NETSTATUS.NET_EXCEPTION, e.getCause()
+						.toString());
+			}
 			super.exceptionCaught(ctx, e);
 		}
 
 		@Override
 		public void channelConnected(ChannelHandlerContext ctx,
 				ChannelStateEvent e) throws Exception {
+			Log.i(LOG_TAG,
+					"Receive channelConnected, channel = " + e.getChannel());
+			super.channelConnected(ctx, e);		
 
-			super.channelConnected(ctx, e);
-
-			// sayHello();
 		}
 
 		@Override
@@ -559,7 +622,8 @@ public class NettyClient implements INetworkConnection {
 			super.channelDisconnected(ctx, e);
 
 			disconnectChannel(e.getChannel());
-
+			broadcastNetStatus2Listener(MIRROR_NETSTATUS.NET_DISCONNECT,
+					"disconnect");
 		}
 
 	}
@@ -573,7 +637,15 @@ public class NettyClient implements INetworkConnection {
 			MIRROR_APPTYPE key = (MIRROR_APPTYPE) entry.getKey();
 			Log.d(LOG_TAG, "notice netstatus to " + key);
 			IMirrorMsgListener val = (IMirrorMsgListener) entry.getValue();
-			val.onError(status, addInfo);
+			if (val != null) {
+				val.onError(status, addInfo);
+			}
 		}
+	}
+
+	@Override
+	public void setIMirrorNetMonitor(IMirrorNetMonitor mon) {
+		// TODO Auto-generated method stub
+		mNetMon = mon;
 	}
 }

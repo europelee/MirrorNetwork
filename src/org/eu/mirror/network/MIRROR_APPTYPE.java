@@ -8,8 +8,8 @@ package org.eu.mirror.network;
 *
  */
 public enum MIRROR_APPTYPE {
-	MIRROR(0), WEATHER(1), MAP(2), MUSIC(3);
-	
+	MIRROR(0), WEATHER(1), MAP(2), MUSIC(3), SCHEDULE(4), MAIL(5), VOICE(6), CAMERA(7), DATE(8), TOUCHPAD(9), SETTINGS(10);
+
 	private int appId;
 	
 	private MIRROR_APPTYPE(int appId) {

@@ -10,6 +10,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.jboss.netty.bootstrap.ServerBootstrap;
+
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelEvent;
 import org.jboss.netty.channel.ChannelFactory;
@@ -57,7 +58,7 @@ public class NettyServer implements INetworkConnection{
 		msgObserList = new HashMap<MIRROR_APPTYPE, IMirrorMsgListener>();
 	}
 
-	@SuppressWarnings("unused")
+	
 	private void sayHello(String peer) {
 		if (isClosed()) {
 			Log.w(LOG_TAG,
@@ -94,7 +95,8 @@ public class NettyServer implements INetworkConnection{
 			Log.e(LOG_TAG, "listener is null");
 			return false;
 		}
-
+		
+		li.setCommInstance(this);
 		msgObserList.put(appType, li);
 
 		return true;
@@ -120,6 +122,10 @@ public class NettyServer implements INetworkConnection{
 			return;
 		}
 
+		if (being_closed.compareAndSet(true, false) == true) {
+			Log.i(LOG_TAG, "Netty client clear being_closed tag.");		
+		}
+		
 		if (null == bootstrap) {
 			bootstrap = new ServerBootstrap(
 					(ChannelFactory) new NioServerSocketChannelFactory(
@@ -156,15 +162,21 @@ public class NettyServer implements INetworkConnection{
 	public void stop() {
 		Log.i(LOG_TAG, "stop");
 
-		if (bind == null)
-			return;
-
-		bind.close().awaitUninterruptibly();
-		bind = null;
-
 		synchronized (channelConning) {
+			Iterator<Channel> iter = connChannelSet.iterator();
+			while (iter.hasNext()) {
+				Channel tmp = iter.next();
+				tmp.close().awaitUninterruptibly();
+				
+			}
 			this.connChannelSet.clear();
 		}
+		
+		if (bind == null)
+			return;
+		
+		bind.close().awaitUninterruptibly();
+		bind = null;
 
 		mIsRunning.set(false);
 	}
@@ -179,6 +191,7 @@ public class NettyServer implements INetworkConnection{
 		}
 		stop();
 		if (null != bootstrap) {
+			
 			bootstrap.releaseExternalResources();
 			bootstrap = null;
 		}
@@ -240,6 +253,11 @@ public class NettyServer implements INetworkConnection{
 								+ " send: " + msg.getAppType() + " "
 								+ msg.getPeerAddress() + " " + msg.getContent());
 				// sayHello(e.getChannel().getRemoteAddress().toString());
+				if (msg.getAppType() == MIRROR_APPTYPE.MIRROR) {
+					Log.d(LOG_TAG, "MIRROR SAY HELLO");
+					sayHello(e.getChannel().getRemoteAddress().toString());
+				}
+				
 				IMirrorMsgListener li = msgObserList.get(msg.getAppType());
 				if (null == li) {
 					Log.e(LOG_TAG,
@@ -356,5 +374,12 @@ public class NettyServer implements INetworkConnection{
 			IMirrorMsgListener val = (IMirrorMsgListener) entry.getValue();
 			val.onError(status, addInfo);
 		}
+	}
+
+
+	@Override
+	public void setIMirrorNetMonitor(IMirrorNetMonitor mon) {
+		// TODO Auto-generated method stub
+		
 	}
 }

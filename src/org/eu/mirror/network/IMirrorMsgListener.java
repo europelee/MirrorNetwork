@@ -8,6 +8,15 @@ package org.eu.mirror.network;
 public interface IMirrorMsgListener {
 	
 	/**
+	 * 
+	* @Title: setCommInstance  
+	* @Description: for responsing, only called  by MirrorNetwork lib
+	* @param CommInst
+	* void
+	* @throws
+	 */
+	public void setCommInstance(INetworkConnection CommInst);	
+	/**
 	 * recv data from network, then do some work
 	 * @param msg
 	 */
